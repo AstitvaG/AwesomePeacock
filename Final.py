@@ -111,7 +111,35 @@ class IniEditor(tk.Tk):
         
 
     def detect_ocelli_template_matching(self,e=None):
-        pass
+        img_rgb = self.pil2bgr(self.img)
+        img_rgb = cv.cvtColor(img_rgb, cv.COLOR_BGR2RGB)
+        img_gray = cv.cvtColor(img_rgb, cv.COLOR_BGR2GRAY)
+        template = self.pil2bgr(self.t_img)
+        template = cv.cvtColor(template, cv.COLOR_BGR2GRAY)
+        w, h = template.shape[::-1]
+        methods = {
+            1:cv.TM_CCOEFF_NORMED,
+            2:cv.TM_CCORR_NORMED,
+            3:cv.TM_SQDIFF_NORMED,
+        }
+        res = cv.matchTemplate(img_gray,template,methods[self.MATCH_METHOD.get()])
+        loc = np.where( res >= self.MATCH_TH.get()/100)
+        img_new = np.zeros_like(img_rgb)
+        self.bare_img_other = np.copy(img_rgb)
+        for pt in zip(*loc[::-1]):
+            cv.circle(img_new,pt,3,(255,255,255),-1)
+            cv.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), (0,0,255), 1)
+        img_new = cv.cvtColor(img_new, cv.COLOR_BGR2GRAY)
+        self.bare_img = Image.fromarray(img_new)
+        conn_comp = cv.connectedComponentsWithStats(img_new)
+        stats = conn_comp[2]
+        for i in range(conn_comp[0]):
+            if stats[i,cv.CC_STAT_WIDTH]>img_rgb.shape[1]*2//3 or stats[i,cv.CC_STAT_HEIGHT]>img_rgb.shape[0]*2//3:
+                continue
+            cv.rectangle(self.bare_img_other, (stats[i,cv.CC_STAT_LEFT],stats[i,cv.CC_STAT_TOP]) , (stats[i,cv.CC_STAT_LEFT]+w,stats[i,cv.CC_STAT_TOP]+h), (0,0,255), 1)
+        self.bare_img_other = Image.fromarray(self.bare_img_other)
+        self.MATCH_OCELLI.set(str(int(conn_comp[0])-1))
+        return Image.fromarray(img_rgb)
 
     def detect_ocelli_hough_transform(self,e=None):
         img_rgb = self.pil2bgr(self.img)
