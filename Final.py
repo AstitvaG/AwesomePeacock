@@ -14,7 +14,8 @@ from skimage.feature import canny
 from skimage.draw import circle_perimeter
 from skimage.util import img_as_ubyte
 
-class IniEditor(tk.Tk):
+
+class Detector(tk.Tk):
 
     def __init__(self):
         super().__init__()
@@ -25,6 +26,8 @@ class IniEditor(tk.Tk):
         self.active_ini = ""
         self.active_ini_filename = ""
         self.ini_elements = {}
+
+
         self.left_frame = tk.Frame(self, width=800, bg="grey")
         self.left_frame.pack_propagate(0)
 
@@ -78,11 +81,62 @@ class IniEditor(tk.Tk):
         self.MATCH_METHOD.set(1)
         self.MATCH_TH = tk.IntVar()
         self.MATCH_TH.set(50)
+        self.MATCH_MIN_TH = tk.IntVar()
+        self.MATCH_MIN_TH.set(50)
+        self.MATCH_MAX_TH = tk.IntVar()
+        self.MATCH_MAX_TH.set(50)
+        self.OTSU_THRES = tk.IntVar()
+        self.OTSU_THRES.set(-1)
+        self.SIGMA = tk.StringVar(self)
+        self.SIGMA.set("2.5")
+        self.MIN_RAD = tk.IntVar()
+        self.MIN_RAD.set(5)
+        self.MAX_RAD = tk.IntVar()
+        self.MAX_RAD.set(10)
+        self.MIN_DIST = tk.IntVar()
+        self.MIN_DIST.set(23)
         self.MATCH_OCELLI = tk.StringVar(self)
         self.MATCH_OCELLI.set("0")
         self.IMAGE_TYPE = tk.IntVar()
         self.IMAGE_TYPE.set(1)
         self.file_open()
+
+    def set_image(self, filename=None, rec_img=None):
+        if filename == None and rec_img == None:
+            return
+        if rec_img==None:
+            self.filename = filename
+            try:
+                self.img = Image.open(filename)
+                rec_img = Image.open(filename)
+            except IOError:
+                print('Ignore: ' + filename + ' cannot be opened as an image')
+                return False
+
+        ratio = float(rec_img.size[1]) / rec_img.size[0]
+        if rec_img.size[0] > 800:
+            self.scale = rec_img.size[0] / 800
+        elif rec_img.size[1] > 500:
+            self.scale = rec_img.size[1] / 500
+        elif rec_img.size[0] < 800 and rec_img.size[1] < 500:
+            v1 = rec_img.size[0] / 800
+            v2 = rec_img.size[1] / 500
+            self.scale = max(v1,v2)
+        else: self.scale = 1
+        self.resized_img = rec_img.resize((int(rec_img.size[0] / self.scale),
+                                            int(rec_img.size[1] / self.scale)),
+                                            Image.ANTIALIAS)
+        self.photo = ImageTk.PhotoImage(self.resized_img)
+        self.canvas.delete(self.canvas_image)
+        self.canvas.config(
+            width=self.resized_img.size[0], height=self.resized_img.size[1])
+        self.canvas_image = self.canvas.create_image(
+            0, 0, anchor=tk.NW, image=self.photo)
+        self.canvas.pack(expand=1)
+        self.left_frame.update()
+        # self.display_section_contents()
+
+        return True
 
     def update_method(self,e=None):
         self.IMAGE_TYPE.set(1)
@@ -93,17 +147,197 @@ class IniEditor(tk.Tk):
         new_height = self.winfo_height()
         self.right_frame.configure(height=new_height)
 
+
     def file_open(self, event=None):
-        ini_file = filedialog.askopenfilename(filetypes=[('Image files', ('.png', '.jpg', '.jpeg'))])
-        if ini_file:
-            self.set_image(ini_file)
+        image_file = filedialog.askopenfilename(filetypes=[('Image files', ('.png', '.jpg', '.jpeg'))])
+
+        if image_file:
+            self.set_image(image_file)
             self.display_section_contents()
             self.detect_ocelli()
-
 
     def clear_right_frame(self):
         for child in self.right_frame.winfo_children():
             child.destroy()
+
+
+    def start_selecting(self):
+        self.select_template = not self.select_template
+        self.selectbutton["state"]="disabled"
+        self.selectbutton["text"]="Draw a square on the image"
+
+    def display_section_contents_sift(self, event=None):
+
+        for child in self.right_frame.winfo_children():
+            child.pack_forget()
+        
+        new_label = tk.Label(self.right_frame, text="Number of Eyes: ", font=(None, 12), bg="black", fg="white")
+        new_label.pack(fill=tk.X, side=tk.TOP, pady=(25,0))
+        new_label = tk.Label(self.right_frame, textvariable=self.MATCH_OCELLI, font=(None, 12), bg="lightgrey", fg="black")
+        new_label.pack(fill=tk.X, side=tk.TOP, pady=(25,25))
+        
+
+        tk.Label(self.right_frame, text="Settings", font=(None, 12), bg="black", fg="white").pack(fill=tk.X, side=tk.TOP, pady=(10,0))
+
+        tk.Label(self.right_frame, text="Matching method (Normalized)", font=(None, 12), bg="lightgrey", fg="black").pack(fill=tk.X, side=tk.TOP, pady=(10,0))
+
+        methods = [
+            ("CCOEFF",1),
+            ("CCORR",2),
+            ("SQDIFF",3),
+        ]
+
+        for txt, val in methods:
+            tk.Radiobutton(self.right_frame, text=txt, padx = 20, variable=self.MATCH_METHOD, value=val, bg="lightgrey", command=self.detect_ocelli).pack()
+
+        tk.Label(self.right_frame, text="Template", font=(None, 12), bg="lightgrey", fg="black").pack(fill=tk.X, side=tk.TOP, pady=(10,0))
+        
+        # self.photo = ImageTk.PhotoImage(self.resized_img)
+        self.template_canvas.delete(self.template_canvas_image)
+        self.template_canvas.config(width=100, height=100)
+        self.template_canvas_image = self.template_canvas.create_image(
+            0, 0, anchor=tk.NW, image=self.template)
+        self.template_canvas.pack()
+        self.right_frame.update()
+        
+        self.selectbutton = tk.Button(self.right_frame, text="Select new", command=self.start_selecting)
+        self.selectbutton.pack(side=tk.TOP, pady=(0,20))
+
+
+        new_label = tk.Label(self.right_frame, text="Threshold (Percent)", font=(None, 12), bg="lightgrey", fg="black")
+        new_label.pack(fill=tk.X, side=tk.TOP, pady=(10,0))
+        w2 = tk.Scale(self.right_frame, from_=0, to=100, orient=tk.HORIZONTAL, bg="lightgrey", variable=self.MATCH_TH, command=self.detect_ocelli)
+        # w2.set(23)
+        w2.pack(fill=tk.X, side=tk.TOP, padx=(40,40), pady=(0,0))
+
+        methods = [
+            ("Detected",1),
+            ("Original",2),
+            ("Bare (Detected)",3),
+            ("Detected (Without Noise)",4),
+        ]
+        new_label = tk.Label(self.right_frame, text="Image type", font=(None, 12), bg="lightgrey", fg="black")
+        new_label.pack(fill=tk.X, side=tk.TOP, pady=(20,0))
+        for txt, val in methods:
+            tk.Radiobutton(self.right_frame, text=txt, padx = 20, variable=self.IMAGE_TYPE, value=val, bg="lightgrey", command=self.changeimage).pack()
+
+
+        save_button = tk.Button(self.right_frame, text="Open New (Ctrl+O)", command=self.file_open)
+        save_button.pack(side=tk.BOTTOM, pady=(0,20))
+
+        # add_button = tk.Button(self.right_frame, text="Add Item", command=self.add_item_form)
+        # add_button.pack(side=tk.BOTTOM, pady=(0,20))
+
+    def display_section_contents_hough(self, event=None):
+
+        for child in self.right_frame.winfo_children():
+            child.pack_forget()
+        
+        new_label = tk.Label(self.right_frame, text="Number of Eyes: ", font=(None, 12), bg="black", fg="white")
+        new_label.pack(fill=tk.X, side=tk.TOP, pady=(25,0))
+        new_label = tk.Label(self.right_frame, textvariable=self.MATCH_OCELLI, font=(None, 12), bg="lightgrey", fg="black")
+        new_label.pack(fill=tk.X, side=tk.TOP, pady=(25,25))
+        
+
+        tk.Label(self.right_frame, text="Settings", font=(None, 12), bg="black", fg="white").pack(fill=tk.X, side=tk.TOP, pady=(10,0))
+
+        tk.Label(self.right_frame, text="Max Threshold", font=(None, 12), bg="lightgrey", fg="black").pack(fill=tk.X, side=tk.TOP, pady=(10,0))
+        ini_element = tk.Spinbox(self.right_frame, from_=0, to=99999, textvariable=self.MATCH_MAX_TH, bg="white", fg="black", justify="center", command=self.detect_ocelli)
+        ini_element.pack(fill=tk.X, side=tk.TOP, pady=(0,10))
+
+
+        tk.Label(self.right_frame, text="Min Threshold", font=(None, 12), bg="lightgrey", fg="black").pack(fill=tk.X, side=tk.TOP, pady=(10,0))
+        ini_element = tk.Spinbox(self.right_frame, from_=0, to=99999, textvariable=self.MATCH_MIN_TH, bg="white", fg="black", justify="center", command=self.detect_ocelli)
+        ini_element.pack(fill=tk.X, side=tk.TOP, pady=(0,10))
+
+        self.selectbutton = tk.Button(self.right_frame, text="Use default thresholds (Otsu)", command=self.set_th_otsu)
+        self.selectbutton.pack(side=tk.TOP, pady=(0,20))
+
+        tk.Label(self.right_frame, text="Sigma", font=(None, 12), bg="lightgrey", fg="black").pack(fill=tk.X, side=tk.TOP, pady=(10,0))
+        ini_element = tk.Entry(self.right_frame, textvariable=self.SIGMA, bg="white", fg="black", justify="center")
+        ini_element.pack(fill=tk.X, side=tk.TOP, pady=(0,20))
+
+        tk.Label(self.right_frame, text="Max Radius", font=(None, 12), bg="lightgrey", fg="black").pack(fill=tk.X, side=tk.TOP, pady=(10,0))
+        ini_element = tk.Spinbox(self.right_frame, from_=1, to=99999, textvariable=self.MAX_RAD, bg="white", fg="black", justify="center", command=self.detect_ocelli)
+        ini_element.pack(fill=tk.X, side=tk.TOP, pady=(0,10))
+
+
+        tk.Label(self.right_frame, text="Min Radius", font=(None, 12), bg="lightgrey", fg="black").pack(fill=tk.X, side=tk.TOP, pady=(10,0))
+        ini_element = tk.Spinbox(self.right_frame, from_=1, to=99999, textvariable=self.MIN_RAD, bg="white", fg="black", justify="center", command=self.detect_ocelli)
+        ini_element.pack(fill=tk.X, side=tk.TOP, pady=(0,10))
+
+
+        tk.Label(self.right_frame, text="Min Distance", font=(None, 12), bg="lightgrey", fg="black").pack(fill=tk.X, side=tk.TOP, pady=(10,0))
+        ini_element = tk.Spinbox(self.right_frame, from_=1, to=99999, textvariable=self.MIN_DIST, bg="white", fg="black", justify="center", command=self.detect_ocelli)
+        ini_element.pack(fill=tk.X, side=tk.TOP, pady=(10,10))
+
+        methods = [
+            ("Detected",1),
+            ("Original",2),
+            ("Bare (Detected)",3),
+            ("Bare (Undetected)",4),
+        ]
+        new_label = tk.Label(self.right_frame, text="Image type", font=(None, 12), bg="lightgrey", fg="black")
+        new_label.pack(fill=tk.X, side=tk.TOP, pady=(20,0))
+        for txt, val in methods:
+            tk.Radiobutton(self.right_frame, text=txt, padx = 20, variable=self.IMAGE_TYPE, value=val, bg="lightgrey", command=self.changeimage).pack()
+
+
+        save_button = tk.Button(self.right_frame, text="Open New (Ctrl+O)", command=self.file_open)
+        save_button.pack(side=tk.BOTTOM, pady=(0,20))
+
+        # add_button = tk.Button(self.right_frame, text="Add Item", command=self.add_item_form)
+        # add_button.pack(side=tk.BOTTOM, pady=(0,20))
+
+    def display_section_contents(self, e = None):
+        val = self.METHOD_TYPE.get()
+        if val == "Detection Using Template Matching (Sift)":
+            self.display_section_contents_sift()
+        else:
+            self.display_section_contents_hough()
+
+    def set_th_otsu(self):
+        otsu = self.OTSU_THRES.get()
+        self.MATCH_MAX_TH.set(otsu)
+        self.MATCH_MIN_TH.set(otsu//2)
+
+
+    def __on_mouse_down(self, event):
+        if not self.select_template: return
+        self.started_selecting = True
+        self.box[0], self.box[1] = event.x, event.y
+        self.box[2], self.box[3] = event.x, event.y
+        print("top left coordinates: %s/%s" % (event.x, event.y))
+
+
+
+    def __on_mouse_release(self, event):
+        if not self.select_template or not self.started_selecting: return
+        self.started_selecting = False
+        self.select_template = False
+        print("bottom_right coordinates: %s/%s" % (self.box[2], self.box[3]))
+        img = self.__crop_image()
+        if img:
+            self.template = ImageTk.PhotoImage(img.resize((100, 100),Image.ANTIALIAS))
+            self.t_img = img
+            self.display_section_contents()
+        self.detect_ocelli()
+        self.selectbutton["state"]="normal"
+        self.selectbutton["text"]="Select new"
+        self.canvas.delete(self.rectangle)
+
+    def __crop_image(self):
+        box = (self.box[0] * self.scale,
+               self.box[1] * self.scale,
+               self.box[2] * self.scale,
+               self.box[3] * self.scale)
+        try:
+            cropped = self.img.crop(box)
+            if cropped.size[0] == 0 and cropped.size[1] == 0:
+                raise SystemError('no size')
+            return cropped
+        except SystemError as e:
+            pass
 
     def pil2bgr(self,img):
         img_rgb = np.array(img)
@@ -199,6 +433,26 @@ class IniEditor(tk.Tk):
             self.set_image(None,self.bare_img_other)
 
 
+    def __fix_ratio_point(self, px, py):
+        dx = px - self.box[0]
+        dy = py - self.box[1]
+        if min((dy / self.ratio), dx) == dx:
+            dy = int(dx * self.ratio)
+        else:
+            dx = int(dy / self.ratio)
+        return self.box[0] + dx, self.box[1] + dy
+
+    def __on_mouse_move(self, event):
+        if not self.select_template or not self.started_selecting: return
+        self.box[2], self.box[3] = self.__fix_ratio_point(event.x, event.y)
+        self.__refresh_rectangle()
+
+    
+    def __refresh_rectangle(self):
+        self.canvas.delete(self.rectangle)
+        self.rectangle = self.canvas.create_rectangle(
+            self.box[0], self.box[1], self.box[2], self.box[3],outline='red', width=3)
+
 if __name__ == "__main__":
-    ini_editor = IniEditor()
-    ini_editor.mainloop()
+    detector = Detector()
+    detector.mainloop()
