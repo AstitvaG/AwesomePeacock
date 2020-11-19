@@ -39,9 +39,9 @@ class Detector(tk.Tk):
         self.right_frame.pack_propagate(0)
 
         self.METHOD_TYPE = tk.StringVar(self)
-        self.METHOD_TYPE.set("Detection Using Template Matching (Sift)")
+        self.METHOD_TYPE.set("Detection Using Template Matching")
 
-        self.method_label = tk.OptionMenu(self, self.METHOD_TYPE, "Detection Using Template Matching (Sift)", "Detection Using Hough Transform", command=self.update_method)
+        self.method_label = tk.OptionMenu(self, self.METHOD_TYPE, "Detection Using Template Matching", "Detection Using Hough Transform", command=self.update_method)
         self.method_label.pack(side=tk.TOP, expand=1, fill=tk.X, anchor="n")
 
         self.select_template = False
@@ -319,7 +319,7 @@ class Detector(tk.Tk):
         Wrapper function for displaying right section
         '''
         val = self.METHOD_TYPE.get()
-        if val == "Detection Using Template Matching (Sift)":
+        if val == "Detection Using Template Matching":
             self.display_section_contents_sift()
         else:
             self.display_section_contents_hough()
@@ -469,7 +469,7 @@ class Detector(tk.Tk):
         '''
         val = self.METHOD_TYPE.get()
         img = None
-        if val == "Detection Using Template Matching (Sift)":
+        if val == "Detection Using Template Matching":
             img = self.detect_ocelli_template_matching()
         else:
             img = self.detect_ocelli_hough_transform()
