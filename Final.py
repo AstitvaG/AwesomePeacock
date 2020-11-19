@@ -18,6 +18,10 @@ from skimage.util import img_as_ubyte
 class Detector(tk.Tk):
 
     def __init__(self):
+        '''
+        Constructor Function for the window
+        Renders all the content and asks user to select image
+        '''
         super().__init__()
 
         self.title("Peacock feather ocelli detection")
@@ -102,6 +106,12 @@ class Detector(tk.Tk):
         self.file_open()
 
     def set_image(self, filename=None, rec_img=None):
+        '''
+        Sets the image in the display view
+        Args:
+            filename: Loction of file to be opened
+            rec_img: PIL image
+        '''
         if filename == None and rec_img == None:
             return
         if rec_img==None:
@@ -139,16 +149,25 @@ class Detector(tk.Tk):
         return True
 
     def update_method(self,e=None):
+        '''
+        Updates the detection technique
+        '''
         self.IMAGE_TYPE.set(1)
         self.detect_ocelli()
         self.display_section_contents()
     
     def frame_height(self, event=None):
+        '''
+        Handles change of frane height
+        '''
         new_height = self.winfo_height()
         self.right_frame.configure(height=new_height)
 
 
     def file_open(self, event=None):
+        '''
+        Opens an new image file
+        '''
         image_file = filedialog.askopenfilename(filetypes=[('Image files', ('.png', '.jpg', '.jpeg'))])
 
         if image_file:
@@ -157,16 +176,25 @@ class Detector(tk.Tk):
             self.detect_ocelli()
 
     def clear_right_frame(self):
+        '''
+        Clears the content of right section
+        '''
         for child in self.right_frame.winfo_children():
             child.destroy()
 
 
     def start_selecting(self):
+        '''
+        Function to start selecting template
+        '''
         self.select_template = not self.select_template
         self.selectbutton["state"]="disabled"
         self.selectbutton["text"]="Draw a square on the image"
 
     def display_section_contents_sift(self, event=None):
+        '''
+        Displays and renders the settings window for sift method
+        '''
 
         for child in self.right_frame.winfo_children():
             child.pack_forget()
@@ -225,10 +253,10 @@ class Detector(tk.Tk):
         save_button = tk.Button(self.right_frame, text="Open New (Ctrl+O)", command=self.file_open)
         save_button.pack(side=tk.BOTTOM, pady=(0,20))
 
-        # add_button = tk.Button(self.right_frame, text="Add Item", command=self.add_item_form)
-        # add_button.pack(side=tk.BOTTOM, pady=(0,20))
-
     def display_section_contents_hough(self, event=None):
+        '''
+        Displays and renders the settings window for hough transform
+        '''
 
         for child in self.right_frame.winfo_children():
             child.pack_forget()
@@ -286,10 +314,10 @@ class Detector(tk.Tk):
         save_button = tk.Button(self.right_frame, text="Open New (Ctrl+O)", command=self.file_open)
         save_button.pack(side=tk.BOTTOM, pady=(0,20))
 
-        # add_button = tk.Button(self.right_frame, text="Add Item", command=self.add_item_form)
-        # add_button.pack(side=tk.BOTTOM, pady=(0,20))
-
     def display_section_contents(self, e = None):
+        '''
+        Wrapper function for displaying right section
+        '''
         val = self.METHOD_TYPE.get()
         if val == "Detection Using Template Matching (Sift)":
             self.display_section_contents_sift()
@@ -297,12 +325,18 @@ class Detector(tk.Tk):
             self.display_section_contents_hough()
 
     def set_th_otsu(self):
+        '''
+        Function to calculate the image threshold using OTSU's method
+        '''
         otsu = self.OTSU_THRES.get()
         self.MATCH_MAX_TH.set(otsu)
         self.MATCH_MIN_TH.set(otsu//2)
 
 
     def __on_mouse_down(self, event):
+        '''
+        Handles mouse click event
+        '''
         if not self.select_template: return
         self.started_selecting = True
         self.box[0], self.box[1] = event.x, event.y
@@ -312,6 +346,9 @@ class Detector(tk.Tk):
 
 
     def __on_mouse_release(self, event):
+        '''
+        Handles mouse release event
+        '''
         if not self.select_template or not self.started_selecting: return
         self.started_selecting = False
         self.select_template = False
@@ -327,6 +364,9 @@ class Detector(tk.Tk):
         self.canvas.delete(self.rectangle)
 
     def __crop_image(self):
+        '''
+        Fuunction to crop image and get the selected template
+        '''
         box = (self.box[0] * self.scale,
                self.box[1] * self.scale,
                self.box[2] * self.scale,
@@ -340,11 +380,20 @@ class Detector(tk.Tk):
             pass
 
     def pil2bgr(self,img):
+        '''
+        Converts PIL image to OpenCV format bgr image
+        '''
         img_rgb = np.array(img)
         return img_rgb[:, :, ::-1].copy() 
         
 
     def detect_ocelli_template_matching(self,e=None):
+        '''
+        Detects ocelli using template matching
+            -> Firstly matches template using 'cv.matchTemplate'
+            -> Then finds the number of connected components to count ocelli
+            -> Then draws rectange over the detected areas
+        '''
         img_rgb = self.pil2bgr(self.img)
         img_rgb = cv.cvtColor(img_rgb, cv.COLOR_BGR2RGB)
         img_gray = cv.cvtColor(img_rgb, cv.COLOR_BGR2GRAY)
@@ -376,6 +425,12 @@ class Detector(tk.Tk):
         return Image.fromarray(img_rgb)
 
     def detect_ocelli_hough_transform(self,e=None):
+        '''
+        Detects ocelli using circular hough transform
+            -> Firstly Edge detection using Canny Detector
+            -> Then uses circular hough transform to detect circles
+            -> Then draws the detected circles on the image
+        '''
         img_rgb = self.pil2bgr(self.img)
         img_rgb = cv.cvtColor(img_rgb, cv.COLOR_BGR2RGB)
         img_gray = cv.cvtColor(img_rgb, cv.COLOR_BGR2GRAY)
@@ -409,6 +464,9 @@ class Detector(tk.Tk):
         return Image.fromarray(img_rgb)
 
     def detect_ocelli(self,e=None):
+        '''
+        Wrapper function for detecting ocelli
+        '''
         val = self.METHOD_TYPE.get()
         img = None
         if val == "Detection Using Template Matching (Sift)":
@@ -422,6 +480,9 @@ class Detector(tk.Tk):
             self.set_image(None,img)
     
     def changeimage(self):
+        '''
+        Changes the type of image to be displayed
+        '''
         val = self.IMAGE_TYPE.get()
         if val==1:
             self.detect_ocelli()
@@ -434,6 +495,9 @@ class Detector(tk.Tk):
 
 
     def __fix_ratio_point(self, px, py):
+        '''
+        Makes sure that the box selected is of square shape
+        '''
         dx = px - self.box[0]
         dy = py - self.box[1]
         if min((dy / self.ratio), dx) == dx:
@@ -443,12 +507,18 @@ class Detector(tk.Tk):
         return self.box[0] + dx, self.box[1] + dy
 
     def __on_mouse_move(self, event):
+        '''
+        Function called when selecting image
+        '''
         if not self.select_template or not self.started_selecting: return
         self.box[2], self.box[3] = self.__fix_ratio_point(event.x, event.y)
         self.__refresh_rectangle()
 
     
     def __refresh_rectangle(self):
+        '''
+        Renders the drawn rectangle over the image
+        '''
         self.canvas.delete(self.rectangle)
         self.rectangle = self.canvas.create_rectangle(
             self.box[0], self.box[1], self.box[2], self.box[3],outline='red', width=3)
